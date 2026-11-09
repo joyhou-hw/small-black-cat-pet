@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">罗小黑</string>
+    <string name="pet_name">罗小黑</string>
+    <string name="notification_channel_pet">宠物常驻</string>
+    <string name="notification_channel_reminder">提醒</string>
+    <string name="notification_pet_text">罗小黑正在陪伴小主人~</string>
+    <string name="permission_overlay_title">悬浮窗权限</string>
+    <string name="permission_overlay_desc">罗小黑需要悬浮窗权限才能显示在屏幕上喵~</string>
+    <string name="permission_usage_title">使用统计权限</string>
+    <string name="permission_usage_desc">罗小黑需要知道小主人在用什么App，才能更好地陪伴喵~</string>
+    <string name="permission_battery_title">电池优化</string>
+    <string name="permission_battery_desc">把罗小黑加入电池优化白名单，防止被系统关掉喵~</string>
+    <string name="permission_protected_title">受保护应用</string>
+    <string name="permission_protected_desc">华为手机需要把罗小黑加入受保护应用，后台才不会被杀喵~</string>
+    <string name="action_grant">去设置</string>
+    <string name="action_skip">稍后</string>
+    <string name="action_start">召唤罗小黑</string>
+    <string name="action_stop">让罗小黑睡觉</string>
+    <string name="settings_title">设置</string>
+    <string name="settings_api_config">AI模型配置</string>
+    <string name="settings_pet_config">宠物外观</string>
+    <string name="settings_study_config">学习模式</string>
+    <string name="settings_about">关于</string>
+</resources>

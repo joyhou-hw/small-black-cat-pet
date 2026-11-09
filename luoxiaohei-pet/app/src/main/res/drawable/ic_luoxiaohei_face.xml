@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  罗小黑占位素材 — 猫脸 VectorDrawable
+  M2 阶段用矢量图代替 WebP 动画，后续替换为正式素材
+  特征：黑色圆脸、大眼睛、小耳朵、简洁线条
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="160dp"
+    android:height="160dp"
+    android:viewportWidth="320"
+    android:viewportHeight="320">
+
+    <!-- 左耳 -->
+    <path
+        android:fillColor="#1A1A1A"
+        android:pathData="M 80,100 L 60,40 L 120,80 Z" />
+
+    <!-- 右耳 -->
+    <path
+        android:fillColor="#1A1A1A"
+        android:pathData="M 240,100 L 260,40 L 200,80 Z" />
+
+    <!-- 左耳内 -->
+    <path
+        android:fillColor="#FF6B9D"
+        android:pathData="M 82,95 L 72,55 L 110,82 Z" />
+
+    <!-- 右耳内 -->
+    <path
+        android:fillColor="#FF6B9D"
+        android:pathData="M 238,95 L 248,55 L 210,82 Z" />
+
+    <!-- 脸（黑色圆） -->
+    <path
+        android:fillColor="#1A1A1A"
+        android:pathData="M 160,60 C 100,60 60,110 60,170 C 60,230 100,270 160,270 C 220,270 260,230 260,170 C 260,110 220,60 160,60 Z" />
+
+    <!-- 左眼白 -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M 115,140 C 105,140 95,150 95,165 C 95,180 105,190 115,190 C 125,190 135,180 135,165 C 135,150 125,140 115,140 Z" />
+
+    <!-- 右眼白 -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M 205,140 C 195,140 185,150 185,165 C 185,180 195,190 205,190 C 215,190 225,180 225,165 C 225,150 215,140 205,140 Z" />
+
+    <!-- 左瞳孔 -->
+    <path
+        android:fillColor="#1A1A1A"
+        android:pathData="M 115,155 C 110,155 105,160 105,167 C 105,174 110,179 115,179 C 120,179 125,174 125,167 C 125,160 120,155 115,155 Z" />
+
+    <!-- 右瞳孔 -->
+    <path
+        android:fillColor="#1A1A1A"
+        android:pathData="M 205,155 C 200,155 195,160 195,167 C 195,174 200,179 205,179 C 210,179 215,174 215,167 C 215,160 210,155 205,155 Z" />
+
+    <!-- 左高光 -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M 112,160 C 110,160 108,162 108,164 C 108,166 110,168 112,168 C 114,168 116,166 116,164 C 116,162 114,160 112,160 Z" />
+
+    <!-- 右高光 -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M 202,160 C 200,160 198,162 198,164 C 198,166 200,168 202,168 C 204,168 206,166 206,164 C 206,162 204,160 202,160 Z" />
+
+    <!-- 鼻子（粉色小三角） -->
+    <path
+        android:fillColor="#FF6B9D"
+        android:pathData="M 152,195 L 168,195 L 160,207 Z" />
+
+    <!-- 嘴（W 形） -->
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="3"
+        android:fillColor="#00000000"
+        android:pathData="M 160,208 Q 150,220 140,212 M 160,208 Q 170,220 180,212" />
+
+    <!-- 腮红 -->
+    <path
+        android:fillColor="#FF6B9D"
+        android:fillAlpha="0.3"
+        android:pathData="M 90,195 C 85,195 80,200 80,205 C 80,210 85,215 90,215 C 95,215 100,210 100,205 C 100,200 95,195 90,195 Z" />
+    <path
+        android:fillColor="#FF6B9D"
+        android:fillAlpha="0.3"
+        android:pathData="M 230,195 C 225,195 220,200 220,205 C 220,210 225,215 230,215 C 235,215 240,210 240,205 C 240,200 235,195 230,195 Z" />
+
+</vector>
