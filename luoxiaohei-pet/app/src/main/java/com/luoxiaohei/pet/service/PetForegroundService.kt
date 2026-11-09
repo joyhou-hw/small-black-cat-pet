@@ -37,6 +37,10 @@ import kotlin.random.Random
  * - 整合动画引擎 + 物理模拟器 + 气泡对话
  * - 处理触摸交互（拖拽/点击/抛掷）
  *
+ * M3 阶段：
+ * - 双击宠物打开聊天页
+ * - 整合 AI 对话（通过广播启动 ChatActivity）
+ *
  * 布局：宠物 View + 气泡 View（两个独立悬浮窗）
  */
 class PetForegroundService : LifecycleService() {
@@ -45,6 +49,10 @@ class PetForegroundService : LifecycleService() {
         private const val NOTIF_ID = 1001
         private const val PET_SIZE_DP = 120
         private const val PHYSICS_DT_MS = 16L  // ~60fps
+        private const val DOUBLE_CLICK_TIMEOUT = 300L  // 双击间隔 ms
+
+        /** 广播Action：打开聊天页 */
+        const val ACTION_OPEN_CHAT = "com.luoxiaohei.pet.OPEN_CHAT"
 
         fun start(context: Context) {
             val intent = Intent(context, PetForegroundService::class.java)
@@ -230,6 +238,9 @@ class PetForegroundService : LifecycleService() {
 
     // ---- 触摸处理 ----
 
+    /** 上次点击时间（用于双击判定） */
+    private var lastClickTime = 0L
+
     private fun handleTouch(touchX: Float, touchY: Float, action: FloatWindowManager.TouchAction) {
         when (action) {
             FloatWindowManager.TouchAction.DOWN -> {
@@ -242,9 +253,19 @@ class PetForegroundService : LifecycleService() {
                 physics.release()
             }
             FloatWindowManager.TouchAction.CLICK -> {
-                // 点击回应
-                animationEngine.onClick()
-                showBubble(AnimationPicker.pick(clickLines))
+                val now = System.currentTimeMillis()
+                if (now - lastClickTime < DOUBLE_CLICK_TIMEOUT) {
+                    // 双击 → 打开聊天
+                    Timber.i("双击宠物，打开聊天")
+                    showBubble("和小黑聊聊天吧~")
+                    sendBroadcast(Intent(ACTION_OPEN_CHAT).setPackage(packageName))
+                    lastClickTime = 0L
+                } else {
+                    // 单击 → 回应动画 + 台词
+                    lastClickTime = now
+                    animationEngine.onClick()
+                    showBubble(AnimationPicker.pick(clickLines))
+                }
             }
         }
     }
