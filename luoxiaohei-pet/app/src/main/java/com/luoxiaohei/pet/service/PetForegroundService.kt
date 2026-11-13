@@ -7,7 +7,6 @@ import android.content.Intent
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
-import android.view.View
 import androidx.core.app.NotificationCompat
 import androidx.lifecycle.LifecycleService
 import com.luoxiaohei.pet.LuoxiaoheiApp
@@ -15,7 +14,11 @@ import com.luoxiaohei.pet.MainActivity
 import com.luoxiaohei.pet.R
 import com.luoxiaohei.pet.domain.animation.AnimationEngine
 import com.luoxiaohei.pet.domain.animation.AnimationPicker
+import com.luoxiaohei.pet.domain.bubble.BubbleManager
+import com.luoxiaohei.pet.domain.bubble.PhraseManager
 import com.luoxiaohei.pet.domain.physics.PhysicsSimulator
+import com.luoxiaohei.pet.domain.sleep.SleepMachine
+import com.luoxiaohei.pet.domain.sleep.SleepState
 import com.luoxiaohei.pet.ui.animation.PetAnimationView
 import com.luoxiaohei.pet.ui.bubble.BubbleView
 import com.luoxiaohei.pet.ui.floatwindow.FloatWindowManager
@@ -32,16 +35,9 @@ import kotlin.random.Random
 /**
  * 前台 Service：宠物保活核心
  *
- * M2 阶段：
- * - 创建悬浮窗显示罗小黑
- * - 整合动画引擎 + 物理模拟器 + 气泡对话
- * - 处理触摸交互（拖拽/点击/抛掷）
- *
- * M3 阶段：
- * - 双击宠物打开聊天页
- * - 整合 AI 对话（通过广播启动 ChatActivity）
- *
- * 布局：宠物 View + 气泡 View（两个独立悬浮窗）
+ * M2: 悬浮窗 + 动画 + 物理 + 气泡
+ * M3: 双击触发聊天
+ * M4: BubbleManager队列 + PhraseManager台词库 + SleepMachine睡眠 + 碎碎念
  */
 class PetForegroundService : LifecycleService() {
 
@@ -49,10 +45,11 @@ class PetForegroundService : LifecycleService() {
         private const val NOTIF_ID = 1001
         private const val PET_SIZE_DP = 120
         private const val PHYSICS_DT_MS = 16L  // ~60fps
-        private const val DOUBLE_CLICK_TIMEOUT = 300L  // 双击间隔 ms
+        private const val DOUBLE_CLICK_TIMEOUT = 300L
 
-        /** 广播Action：打开聊天页 */
         const val ACTION_OPEN_CHAT = "com.luoxiaohei.pet.OPEN_CHAT"
+        const val ACTION_SLEEP = "com.luoxiaohei.pet.SLEEP"
+        const val ACTION_WAKE = "com.luoxiaohei.pet.WAKE"
 
         fun start(context: Context) {
             val intent = Intent(context, PetForegroundService::class.java)
@@ -75,50 +72,39 @@ class PetForegroundService : LifecycleService() {
     private lateinit var animationEngine: AnimationEngine
     private lateinit var physics: PhysicsSimulator
 
+    // M4 新增
+    private lateinit var bubbleManager: BubbleManager
+    private lateinit var phraseManager: PhraseManager
+    private lateinit var sleepMachine: SleepMachine
+
     /** 宠物尺寸 px */
     private val petSizePx: Int by lazy {
         (PET_SIZE_DP * resources.displayMetrics.density).toInt()
     }
-
-    /** 罗小黑台词（M2 占位，M4 接入 AI） */
-    private val idleLines = listOf(
-        "喵~",
-        "小主人在干嘛呀？",
-        "罗小黑有点无聊了...",
-        "戳戳我嘛！",
-        "今天天气怎么样？",
-        "小主人要好好学习哦~",
-        "罗小黑肚子里装了好多鱼干！",
-        "哼，才不是在等你呢",
-        "窗外有蝴蝶飞过去了喵",
-        "小主人今天开心吗？"
-    )
-
-    private val clickLines = listOf(
-        "喵！干嘛戳我！",
-        "小主人终于理我啦~",
-        "嘿嘿，被发现了",
-        "罗小黑在这里呀！",
-        "嗯？叫我干嘛喵？"
-    )
 
     // ---- 生命周期 ----
 
     override fun onCreate() {
         super.onCreate()
         startForeground(NOTIF_ID, buildNotification())
-        Timber.i("PetForegroundService 启动")
+        Timber.i("PetForegroundService 启动 (M4)")
 
         initViews()
         initPhysics()
         initAnimationEngine()
+        initBubbleAndPhrases()
+        initSleepMachine()
 
-        // 延迟显示（等 Service 完全启动）
         handler.postDelayed({ showPet() }, 500)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         super.onStartCommand(intent, flags, startId)
+        // 处理Action命令
+        when (intent?.action) {
+            ACTION_SLEEP -> triggerSleep()
+            ACTION_WAKE -> triggerWake()
+        }
         return START_STICKY
     }
 
@@ -130,6 +116,7 @@ class PetForegroundService : LifecycleService() {
     override fun onDestroy() {
         Timber.i("PetForegroundService 停止")
         animationEngine.stop()
+        bubbleManager.clear()
         floatWindowManager.hidePet()
         bubbleView.release()
         serviceScope.cancel()
@@ -141,19 +128,13 @@ class PetForegroundService : LifecycleService() {
     private fun initViews() {
         floatWindowManager = FloatWindowManager(this)
 
-        // 宠物 View
-        petView = PetAnimationView(this).apply {
-            scale = 1.0f
-        }
+        petView = PetAnimationView(this).apply { scale = 1.0f }
 
-        // 气泡 View
         bubbleView = BubbleView(this).apply {
             charIntervalMs = 80L
             displayDurationMs = 4000L
             fadeOutMs = 600L
-            onDismiss = {
-                floatWindowManager.hideBubble()
-            }
+            onDismiss = { floatWindowManager.hideBubble() }
         }
     }
 
@@ -165,18 +146,9 @@ class PetForegroundService : LifecycleService() {
             petHeight = petSizePx
         )
 
-        physics.onPosition = { x, y ->
-            floatWindowManager.movePetTo(x.toInt(), y.toInt())
-        }
-
-        physics.onSquash = { sx, sy ->
-            petView.updateSquash(sx, sy)
-        }
-
-        physics.onLanding = { impactSpeed ->
-            Timber.d("落地冲击速度: $impactSpeed px/s")
-        }
-
+        physics.onPosition = { x, y -> floatWindowManager.movePetTo(x.toInt(), y.toInt()) }
+        physics.onSquash = { sx, sy -> petView.updateSquash(sx, sy) }
+        physics.onLanding = { impactSpeed -> Timber.d("落地冲击速度: $impactSpeed px/s") }
         physics.onState = { state ->
             when (state) {
                 PhysicsSimulator.PhysicsState.IDLE -> {
@@ -203,6 +175,43 @@ class PetForegroundService : LifecycleService() {
         animationEngine = AnimationEngine(petView, serviceScope)
     }
 
+    private fun initBubbleAndPhrases() {
+        phraseManager = PhraseManager(this)
+
+        bubbleManager = BubbleManager(serviceScope, minIntervalMs = 2000L)
+        bubbleManager.onShow = { text -> showBubble(text) }
+        bubbleManager.onHide = { floatWindowManager.hideBubble() }
+    }
+
+    private fun initSleepMachine() {
+        sleepMachine = SleepMachine(serviceScope)
+
+        // 监听睡眠状态变化
+        serviceScope.launch {
+            sleepMachine.state.collect { state ->
+                when (state) {
+                    is SleepState.FallingAsleep -> {
+                        animationEngine.isSleeping = true
+                        petView.play(PetAnimationView.PetAnimation.SLEEPING)
+                        bubbleManager.enqueue(phraseManager.sleepStart(), BubbleManager.Priority.NORMAL)
+                    }
+                    is SleepState.Sleeping -> {
+                        // 深度睡眠，动画引擎自动降低频率
+                    }
+                    is SleepState.WakingUp -> {
+                        animationEngine.isSleeping = false
+                        petView.play(PetAnimationView.PetAnimation.IDLE)
+                    }
+                    is SleepState.Awake -> {
+                        animationEngine.isSleeping = false
+                        animationEngine.backToIdle()
+                        bubbleManager.enqueue(phraseManager.sleepEnd(), BubbleManager.Priority.NORMAL)
+                    }
+                }
+            }
+        }
+    }
+
     // ---- 显示宠物 ----
 
     private fun showPet() {
@@ -211,34 +220,22 @@ class PetForegroundService : LifecycleService() {
             return
         }
 
-        // 设置宠物初始位置
         val initX = (floatWindowManager.screenWidth - petSizePx) / 2
         val initY = floatWindowManager.screenHeight - petSizePx - 100
         physics.setPosition(initX.toFloat(), initY.toFloat())
 
-        // 显示悬浮窗
         floatWindowManager.showPet(petView, petSizePx, petSizePx, initX, initY)
+        floatWindowManager.addTouchListener { x, y, action -> handleTouch(x, y, action) }
 
-        // 注册触摸事件
-        floatWindowManager.addTouchListener { x, y, action ->
-            handleTouch(x, y, action)
-        }
-
-        // 启动动画引擎
         animationEngine.start()
-
-        // 启动物理循环
         startPhysicsLoop()
+        startWhisper()
 
-        // 启动主动说话
-        startIdleSpeech()
-
-        Timber.i("宠物已显示在屏幕上")
+        Timber.i("宠物已显示在屏幕上 (M4)")
     }
 
     // ---- 触摸处理 ----
 
-    /** 上次点击时间（用于双击判定） */
     private var lastClickTime = 0L
 
     private fun handleTouch(touchX: Float, touchY: Float, action: FloatWindowManager.TouchAction) {
@@ -253,18 +250,24 @@ class PetForegroundService : LifecycleService() {
                 physics.release()
             }
             FloatWindowManager.TouchAction.CLICK -> {
+                // 睡着时点击 → 拒绝打扰
+                if (sleepMachine.isSleeping()) {
+                    bubbleManager.enqueue(sleepMachine.onDisturb(), BubbleManager.Priority.HIGH)
+                    return
+                }
+
                 val now = System.currentTimeMillis()
                 if (now - lastClickTime < DOUBLE_CLICK_TIMEOUT) {
                     // 双击 → 打开聊天
                     Timber.i("双击宠物，打开聊天")
-                    showBubble("和小黑聊聊天吧~")
+                    bubbleManager.enqueue("和小黑聊聊天吧~", BubbleManager.Priority.URGENT)
                     sendBroadcast(Intent(ACTION_OPEN_CHAT).setPackage(packageName))
                     lastClickTime = 0L
                 } else {
-                    // 单击 → 回应动画 + 台词
+                    // 单击 → 回应
                     lastClickTime = now
                     animationEngine.onClick()
-                    showBubble(AnimationPicker.pick(clickLines))
+                    bubbleManager.enqueue(phraseManager.click(), BubbleManager.Priority.HIGH)
                 }
             }
         }
@@ -281,48 +284,59 @@ class PetForegroundService : LifecycleService() {
                 val now = System.currentTimeMillis()
                 val dt = now - lastFrameTime
                 lastFrameTime = now
-
                 physics.step(dt)
                 delay(PHYSICS_DT_MS)
             }
         }
     }
 
-    // ---- 主动说话 ----
+    // ---- 碎碎念（主动说话）----
 
-    private fun startIdleSpeech() {
+    private fun startWhisper() {
         serviceScope.launch {
             // 启动后 10 秒第一次说话
             delay(10000)
-            if (isActive) showBubble(idleLines.random())
+            if (isActive && !sleepMachine.isSleeping()) {
+                bubbleManager.enqueue(phraseManager.idle(), BubbleManager.Priority.LOW)
+            }
 
             // 之后随机间隔说话（15~60秒）
             while (isActive) {
                 val interval = Random.nextLong(15000, 60000)
                 delay(interval)
-                if (isActive && !bubbleView.isShowing) {
-                    showBubble(idleLines.random())
+                if (isActive && !sleepMachine.isSleeping() && !bubbleManager.isShowing) {
+                    bubbleManager.enqueue(phraseManager.idle(), BubbleManager.Priority.LOW)
                 }
             }
         }
     }
 
-    // ---- 气泡 ----
+    // ---- 睡眠控制 ----
+
+    private fun triggerSleep() {
+        if (!sleepMachine.isSleeping()) {
+            sleepMachine.sleep()
+        }
+    }
+
+    private fun triggerWake() {
+        if (sleepMachine.isSleeping()) {
+            sleepMachine.wake()
+        }
+    }
+
+    // ---- 气泡显示 ----
 
     private fun showBubble(text: String) {
         if (!floatWindowManager.isShowing) return
 
-        // 先移除旧气泡
         floatWindowManager.hideBubble()
 
-        // 重新创建气泡（因为 hideBubble 会移除 View）
         bubbleView = BubbleView(this).apply {
             charIntervalMs = 80L
             displayDurationMs = 4000L
             fadeOutMs = 600L
-            onDismiss = {
-                floatWindowManager.hideBubble()
-            }
+            onDismiss = { floatWindowManager.hideBubble() }
         }
 
         floatWindowManager.showBubble(bubbleView, 400, 120)

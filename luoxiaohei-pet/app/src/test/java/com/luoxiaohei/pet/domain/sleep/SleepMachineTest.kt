@@ -1,75 +1,80 @@
 package com.luoxiaohei.pet.domain.sleep
 
-import org.junit.Assert.assertTrue
-import org.junit.Assert.assertEquals
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.runTest
+import org.junit.Assert.*
 import org.junit.Test
 
 /**
- * 睡眠状态机测试
+ * SleepMachine 单元测试（M4 升级版）
+ *
+ * 验证协程驱动的睡眠三段状态机
  */
 class SleepMachineTest {
 
+    private fun createMachine(): SleepMachine {
+        return SleepMachine(CoroutineScope(Dispatchers.Unconfined + SupervisorJob()))
+    }
+
     @Test
     fun `初始状态为Awake`() {
-        val machine = SleepMachine()
+        val machine = createMachine()
         assertTrue(machine.state.value is SleepState.Awake)
+        assertFalse(machine.isSleeping())
     }
 
     @Test
-    fun `sleep从Awake进入FallingAsleep`() {
-        val machine = SleepMachine()
+    fun `sleep后进入FallingAsleep`() {
+        val machine = createMachine()
         machine.sleep()
         assertTrue(machine.state.value is SleepState.FallingAsleep)
-    }
-
-    @Test
-    fun `sleep在非Awake状态无效`() {
-        val machine = SleepMachine()
-        machine.sleep()
-        machine.sleep() // 重复调用
-        assertTrue(machine.state.value is SleepState.FallingAsleep)
-    }
-
-    @Test
-    fun `onFallAsleepComplete进入Sleeping`() {
-        val machine = SleepMachine()
-        machine.sleep()
-        machine.onFallAsleepComplete()
         assertTrue(machine.isSleeping())
     }
 
     @Test
-    fun `wake从Sleeping进入WakingUp`() {
-        val machine = SleepMachine()
+    fun `入睡过程中wake回到Awake`() {
+        val machine = createMachine()
         machine.sleep()
-        machine.onFallAsleepComplete()
+        assertTrue(machine.state.value is SleepState.FallingAsleep)
         machine.wake()
-        assertTrue(machine.state.value is SleepState.WakingUp)
-    }
-
-    @Test
-    fun `onWakeUpComplete回到Awake`() {
-        val machine = SleepMachine()
-        machine.sleep()
-        machine.onFallAsleepComplete()
-        machine.wake()
-        machine.onWakeUpComplete()
         assertTrue(machine.state.value is SleepState.Awake)
     }
 
     @Test
-    fun `睡眠中被打扰返回拒绝台词`() {
-        val machine = SleepMachine()
-        machine.sleep()
-        machine.onFallAsleepComplete()
-        val reply = machine.onDisturb()
-        assertTrue("拒绝台词应非空", reply.isNotEmpty())
+    fun `清醒时wake无效果`() {
+        val machine = createMachine()
+        machine.wake()
+        assertTrue(machine.state.value is SleepState.Awake)
     }
 
     @Test
-    fun `Awake状态被打扰返回空字符串`() {
-        val machine = SleepMachine()
-        val reply = machine.onDisturb()
-        assertEquals("", reply)
+    fun `睡着时onDisturb返回拒绝台词`() {
+        val machine = createMachine()
+        machine.sleep()
+        val text = machine.onDisturb()
+        assertTrue(text.isNotEmpty())
+    }
+
+    @Test
+    fun `清醒时onDisturb返回空`() {
+        val machine = createMachine()
+        val text = machine.onDisturb()
+        assertEquals("", text)
+    }
+
+    @Test
+    fun `sleepStartText非空`() {
+        val machine = createMachine()
+        assertTrue(machine.sleepStartText().isNotEmpty())
+    }
+
+    @Test
+    fun `sleepEndText非空`() {
+        val machine = createMachine()
+        assertTrue(machine.sleepEndText().isNotEmpty())
     }
 }
